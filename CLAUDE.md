@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # Set JDK 21 (required — record syntax, virtual threads)
 export JAVA_HOME="D:\Develop\DevelopTool\StudyEnvironment\PhpWebStudy-Data\app\openjdk-21.0.9"
-
+ 
 # Compile
 cd Argus-backend && ./mvnw clean compile
 
