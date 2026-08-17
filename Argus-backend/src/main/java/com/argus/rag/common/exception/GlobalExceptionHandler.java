@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 全局异常拦截，将各类异常映射为对应的 HTTP 状态码和 {@link ApiResponse}。
@@ -58,6 +59,13 @@ public class GlobalExceptionHandler {
             MaxUploadSizeExceededException exception
     ) {
         return new ApiResponse<>(false, null, "上传文件超过大小限制");
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiResponse<Void> handleNoResourceFoundException(NoResourceFoundException exception) {
+        log.warn("Resource not found: {}", exception.getMessage());
+        return new ApiResponse<>(false, null, "请求的资源不存在");
     }
 
     /** 兜底处理，避免堆栈信息泄露到前端 */

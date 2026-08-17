@@ -10,8 +10,8 @@ spring:
     name: argus-service
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:dd_rag}
-    username: ${DB_USERNAME:your-db-username}
-    password: ${DB_PASSWORD:your-db-password}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:lgl}
     driver-class-name: org.postgresql.Driver
 
   # ──────────────────────────────────────────────
@@ -22,18 +22,18 @@ spring:
       chat: dashscope
       embedding: openai
     dashscope:
-      api-key: ${DASHSCOPE_API_KEY:your-dashscope-api-key}
+      api-key: ${DASHSCOPE_API_KEY:sk-ws-H.EPHEEEM.V532.MEYCIQCrE7JJ4fB-W-C8ZdiVx4xrVlGucZJ0KrgVc8wql6PweAIhAIXAWRX2SYBXB2yIvORX6njC93PsHa-pwRODkWA2BxqN}
       chat:
         options:
-          model: qwen-plus
+          model: qwen3.7-max
     openai:
-      api-key: ${OPENAI_API_KEY:your-openai-compatible-api-key}
+      api-key: ${OPENAI_API_KEY:sk-ws-H.EPHEEEM.V532.MEYCIQCrE7JJ4fB-W-C8ZdiVx4xrVlGucZJ0KrgVc8wql6PweAIhAIXAWRX2SYBXB2yIvORX6njC93PsHa-pwRODkWA2BxqN}
       base-url: ${OPENAI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
       embedding:
         options:
           # 指定维度，确保与数据库表结构一致
           dimensions: 512
-          model: text-embedding-v3
+          model: qwen3.7-text-embedding
           # 单个输入超过模型 context length 时由 Ollama 截断，避免上传链路直接失败。
           truncate: true
 
@@ -66,8 +66,8 @@ spring:
 storage:
   minio:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
-    access-key: ${MINIO_ACCESS_KEY:your-minio-access-key}
-    secret-key: ${MINIO_SECRET_KEY:your-minio-secret-key}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY:minioadmin}
     bucket: ${MINIO_BUCKET:argus-rag-documents}
 
 rag:
