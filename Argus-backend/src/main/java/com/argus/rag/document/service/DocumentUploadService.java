@@ -25,11 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * 大文件分片上传服务。
@@ -651,6 +651,7 @@ public class DocumentUploadService {
         String fileExt = extractFileExt(fileName);
         String bucket = objectStorageService.getDefaultBucket();
         String objectKey = buildDirectObjectKey(groupId, userId, fileExt);
+        String fileHash = calculateSha256(file);
         DocumentEntity document = null;
         log.info("开始上传文档: groupId={}, userId={}, fileName={}, size={}, objectKey={}",
                 groupId, userId, fileName, file.getSize(), objectKey);
@@ -660,7 +661,7 @@ public class DocumentUploadService {
             document = persistAndFinalizeUploadedDocument(new FinalizedUploadCommand(
                     groupId, userId, fileName, fileExt,
                     normalizeContentType(file.getContentType()), file.getSize(),
-                    null, bucket, objectKey));
+                    fileHash, bucket, objectKey));
             return document.getId();
         } catch (RuntimeException exception) {
             log.error("文档上传链路失败: groupId={}, objectKey={}, reason={}",
@@ -668,6 +669,30 @@ public class DocumentUploadService {
             compensateExternalIndexes(document);
             compensateUploadedDirectObject(bucket, objectKey, exception);
             throw exception;
+        }
+    }
+
+    private String calculateSha256(MultipartFile file) {
+        try {
+            return computeSha256(file.getBytes());
+        } catch (IOException exception) {
+            throw new BusinessException("读取上传文件失败");
+        }
+    }
+
+
+    /**
+     * 计算字节数组的 SHA-256 哈希值。
+     *
+     * @param data 待哈希的字节数组
+     * @return 64 字符十六进制 SHA-256 哈希字符串
+     */
+    private String computeSha256(byte[] data) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(data));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 algorithm is unavailable", exception);
         }
     }
 
