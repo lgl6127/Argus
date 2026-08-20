@@ -25,7 +25,7 @@ spring:
       api-key: ${DASHSCOPE_API_KEY:sk-ws-H.EPHEEEM.V532.MEYCIQCrE7JJ4fB-W-C8ZdiVx4xrVlGucZJ0KrgVc8wql6PweAIhAIXAWRX2SYBXB2yIvORX6njC93PsHa-pwRODkWA2BxqN}
       chat:
         options:
-          model: qwen3.7-max
+          model: glm-5.2
     openai:
       api-key: ${OPENAI_API_KEY:sk-ws-H.EPHEEEM.V532.MEYCIQCrE7JJ4fB-W-C8ZdiVx4xrVlGucZJ0KrgVc8wql6PweAIhAIXAWRX2SYBXB2yIvORX6njC93PsHa-pwRODkWA2BxqN}
       base-url: ${OPENAI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
