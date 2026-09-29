@@ -43,8 +43,8 @@ public interface GroupJoinRequestMapper extends BaseMapper<GroupJoinRequest> {
     /** 更新加入申请状态（乐观锁：仅当当前状态匹配 fromStatus 时才更新） */
     int updateJoinRequestStatus(@Param("requestId") Long requestId, @Param("fromStatus") String fromStatus, @Param("toStatus") String toStatus, @Param("decidedByUserId") Long decidedByUserId);
 
-    /** 将指定群组的所有待处理加入申请置为已取消，避免产生孤立申请 */
-    int cancelPendingJoinRequestsByGroupId(@Param("groupId") Long groupId, @Param("canceledStatus") String canceledStatus);
+    /** 批量取消多个群组的所有待处理加入申请，避免产生孤立申请 */
+    int cancelPendingJoinRequestsByGroupIds(@Param("groupIds") List<Long> groupIds, @Param("canceledStatus") String canceledStatus);
 
     /** 插入成员关系记录 */
     int insertMembership(@Param("groupId") Long groupId, @Param("userId") Long userId, @Param("role") String role);

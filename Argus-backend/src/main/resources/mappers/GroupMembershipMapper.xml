@@ -94,28 +94,50 @@
         where id = #{userId}
     </select>
 
-    <select id="countActiveGroupById" resultType="long">
-        select count(1)
+    <select id="selectActiveGroupIdsByIds" resultType="long">
+        select id
         from groups
-        where id = #{groupId}
+        where id in
+        <foreach collection="groupIds" item="groupId" open="(" separator="," close=")">
+            #{groupId}
+        </foreach>
           and status = 'ACTIVE'
     </select>
 
-    <update id="archiveGroup">
+    <select id="selectOwnerGroupIds" resultType="long">
+        select gm.group_id
+        from group_memberships gm
+                 inner join groups g on g.id = gm.group_id
+        where gm.user_id = #{userId}
+          and gm.role = #{ownerRole}
+          and g.status = 'ACTIVE'
+          and gm.group_id in
+        <foreach collection="groupIds" item="groupId" open="(" separator="," close=")">
+            #{groupId}
+        </foreach>
+    </select>
+
+    <update id="archiveGroups">
         update groups
         set status = 'ARCHIVED',
             updated_at = now()
-        where id = #{groupId}
-          and status = 'ACTIVE'
+        where status = 'ACTIVE'
+          and id in
+        <foreach collection="groupIds" item="groupId" open="(" separator="," close=")">
+            #{groupId}
+        </foreach>
     </update>
 
-    <update id="cancelPendingInvitationsByGroupId">
+    <update id="cancelPendingInvitationsByGroupIds">
         update group_invitations
         set status = #{canceledStatus},
             decided_at = now(),
             updated_at = now()
-        where group_id = #{groupId}
-          and status = 'PENDING'
+        where status = 'PENDING'
+          and group_id in
+        <foreach collection="groupIds" item="groupId" open="(" separator="," close=")">
+            #{groupId}
+        </foreach>
     </update>
 
     <select id="insertGroupReturningId" resultType="long">

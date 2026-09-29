@@ -104,13 +104,16 @@
           and status = #{fromStatus}
     </update>
 
-    <update id="cancelPendingJoinRequestsByGroupId">
+    <update id="cancelPendingJoinRequestsByGroupIds">
         update group_join_requests
         set status = #{canceledStatus},
             decided_at = now(),
             updated_at = now()
-        where group_id = #{groupId}
-          and status = 'PENDING'
+        where status = 'PENDING'
+          and group_id in
+        <foreach collection="groupIds" item="groupId" open="(" separator="," close=")">
+            #{groupId}
+        </foreach>
     </update>
 
     <insert id="insertMembership">

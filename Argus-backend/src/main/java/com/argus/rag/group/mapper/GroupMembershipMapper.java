@@ -40,14 +40,17 @@ public interface GroupMembershipMapper extends BaseMapper<Group> {
     /** 统计指定用户 ID 对应的用户数量（用于校验用户是否存在） */
     Long countUserById(@Param("userId") Long userId);
 
-    /** 统计指定 ID 的活跃群组数量（用于区分群组不存在与已归档） */
-    Long countActiveGroupById(@Param("groupId") Long groupId);
+    /** 按 ID 集合查询活跃群组 ID（用于批量删除前的存在性校验） */
+    List<Long> selectActiveGroupIdsByIds(@Param("groupIds") List<Long> groupIds);
 
-    /** 归档群组（软删除：仅当群组处于 ACTIVE 状态时生效，返回影响行数） */
-    int archiveGroup(@Param("groupId") Long groupId);
+    /** 查询当前用户在给定群组 ID 集合中拥有指定角色的群组（用于批量删除前的 OWNER 权限校验） */
+    List<Long> selectOwnerGroupIds(@Param("userId") Long userId, @Param("groupIds") List<Long> groupIds, @Param("ownerRole") String ownerRole);
 
-    /** 将指定群组的所有待处理邀请置为已取消，避免产生孤立邀请 */
-    int cancelPendingInvitationsByGroupId(@Param("groupId") Long groupId, @Param("canceledStatus") String canceledStatus);
+    /** 批量归档群组（软删除：仅对 ACTIVE 状态群组生效，返回影响行数用于并发拦截） */
+    int archiveGroups(@Param("groupIds") List<Long> groupIds);
+
+    /** 批量取消多个群组的所有待处理邀请，避免产生孤立邀请 */
+    int cancelPendingInvitationsByGroupIds(@Param("groupIds") List<Long> groupIds, @Param("canceledStatus") String canceledStatus);
 
     /** 插入群组并返回自增主键 */
     Long insertGroupReturningId(@Param("groupCode") String groupCode, @Param("groupName") String groupName, @Param("description") String description, @Param("ownerUserId") Long ownerUserId, @Param("status") String status);

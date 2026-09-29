@@ -18,7 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -172,33 +174,25 @@ public class GroupManagementService {
     /**
      * 批量删除群组（软删除：归档为 ARCHIVED，仅 OWNER 可操作）。
      * <p>
-     * 整个批次在同一事务内完成，任一群组校验失败则全部回滚；
-     * 归档同时将待处理邀请、待处理加入申请置为已取消，避免产生孤立数据；
-     * 成员关系与文档、问答等历史数据保留，归档群组对所有业务查询不可见。
+     * 整批按“校验 → 归档 → 关联清理”三段式执行，每段一条批量 SQL，避免逐组往返数据库；
+     * 同一事务内任一步骤失败则整批回滚；归档同时将待处理邀请、待处理加入申请置为已取消，
+     * 避免产生孤立数据；成员关系与文档、问答等历史数据保留，归档群组对所有业务查询不可见。
      */
     @Transactional
     public void deleteGroups(List<Long> groupIds) {
         List<Long> distinctGroupIds = validateDeleteBatch(groupIds);
-        for (Long groupId : distinctGroupIds) {
-            deleteSingleGroup(groupId);
-        }
-        log.info("批量删除群组成功: groupIds={}", distinctGroupIds);
-    }
+        requireAllGroupsActive(distinctGroupIds);
+        requireAllGroupsOwned(distinctGroupIds);
 
-    /** 删除单个群组的完整流程（需在事务内调用） */
-    private void deleteSingleGroup(Long groupId) {
-        if (!hasRows(groupMembershipMapper.countActiveGroupById(groupId))) {
-            throw new BusinessException("小组不存在或已删除: " + groupId);
+        int archived = groupMembershipMapper.archiveGroups(distinctGroupIds);
+        if (archived != distinctGroupIds.size()) {
+            // 并发场景下部分群组已被其他请求删除，乐观拦截后报错回滚整批
+            throw new BusinessException("小组不存在或已删除");
         }
-        groupMembershipService.requireGroupOwner(groupId);
-        int archived = groupMembershipMapper.archiveGroup(groupId);
-        if (archived == 0) {
-            // 并发场景下已被其他请求删除，乐观拦截后报错回滚整批
-            throw new BusinessException("小组不存在或已删除: " + groupId);
-        }
-        groupMembershipMapper.cancelPendingInvitationsByGroupId(groupId, GroupInvitationStatus.CANCELED.name());
-        groupJoinRequestMapper.cancelPendingJoinRequestsByGroupId(groupId, GroupJoinRequestStatus.CANCELED.name());
-        log.info("归档群组: groupId={}, 已同步取消待处理邀请与加入申请", groupId);
+
+        groupMembershipMapper.cancelPendingInvitationsByGroupIds(distinctGroupIds, GroupInvitationStatus.CANCELED.name());
+        groupJoinRequestMapper.cancelPendingJoinRequestsByGroupIds(distinctGroupIds, GroupJoinRequestStatus.CANCELED.name());
+        log.info("批量删除群组成功: count={}, groupIds={}", distinctGroupIds.size(), distinctGroupIds);
     }
 
     /** 校验删除批次：非空、ID 合法、去重、不超过单次上限 */
@@ -214,6 +208,27 @@ public class GroupManagementService {
             throw new BusinessException("单次最多删除 " + MAX_DELETE_BATCH_SIZE + " 个小组");
         }
         return distinctGroupIds;
+    }
+
+    /** 批量存在性校验：一次查出实际存在的活跃群组，与入参差集非空则报错 */
+    private void requireAllGroupsActive(List<Long> groupIds) {
+        Set<Long> activeIds = new HashSet<>(groupMembershipMapper.selectActiveGroupIdsByIds(groupIds));
+        List<Long> missingIds = groupIds.stream()
+                .filter(id -> !activeIds.contains(id))
+                .toList();
+        if (!missingIds.isEmpty()) {
+            throw new BusinessException("小组不存在或已删除: " + missingIds);
+        }
+    }
+
+    /** 批量 OWNER 权限校验：当前用户必须在全部待删群组中拥有 OWNER 角色，否则整批拒绝 */
+    private void requireAllGroupsOwned(List<Long> groupIds) {
+        CurrentUserService.CurrentUser currentUser = currentUserService.requireBusinessUser();
+        Set<Long> ownedIds = new HashSet<>(groupMembershipMapper.selectOwnerGroupIds(
+                currentUser.userId(), groupIds, GroupRole.OWNER.name()));
+        if (!ownedIds.containsAll(groupIds)) {
+            throw new BusinessException("无权删除小组，仅 OWNER 可删除");
+        }
     }
 
     private void rejectDuplicateInvitationTarget(Long groupId, Long inviteeUserId) {
