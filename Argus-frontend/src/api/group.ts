@@ -191,6 +191,23 @@ export async function createGroup(payload: CreateGroupPayload): Promise<number> 
 }
 
 /**
+ * 批量删除群组（软删除归档）
+ *
+ * DELETE /api/groups
+ *
+ * 仅对目标群组的 OWNER 生效；单个删除传一个 ID 即可。
+ * 后端在同一事务内归档群组并取消待处理邀请、加入申请。
+ *
+ * @param groupIds 要删除的群组 ID 列表
+ */
+export async function deleteGroups(groupIds: number[]): Promise<void> {
+  const { data } = await http.delete<ApiResponse<null>>('/groups', { data: { groupIds } })
+  if (!data.success) {
+    throw new Error(data.message ?? '删除小组失败')
+  }
+}
+
+/**
  * 邀请用户加入群组
  *
  * POST /api/groups/{groupId}/invitations

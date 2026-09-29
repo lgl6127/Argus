@@ -1,15 +1,23 @@
 <script setup lang="ts">
-defineProps<{
-  title: string
-  description?: string
-  code?: string
-  time?: string
-  tagText?: string
-  tagType?: 'default' | 'accent' | 'success' | 'warning' | 'danger'
-}>()
+withDefaults(
+  defineProps<{
+    title: string
+    description?: string
+    code?: string
+    time?: string
+    tagText?: string
+    tagType?: 'default' | 'accent' | 'success' | 'warning' | 'danger'
+    /** 是否展示选择复选框（删除选择模式） */
+    selectable?: boolean
+    /** 复选框是否勾选 */
+    selected?: boolean
+  }>(),
+  { selectable: false, selected: false },
+)
 
 const emit = defineEmits<{
   click: []
+  toggleSelect: []
 }>()
 </script>
 
@@ -22,6 +30,18 @@ const emit = defineEmits<{
     <div class="glass-card-glow"></div>
     
     <div class="glass-header">
+      <!-- 选择区：.stop 阻断卡片 click，避免勾选时误开管理弹窗 -->
+      <span
+        v-if="selectable"
+        class="glass-select"
+        role="checkbox"
+        :aria-checked="selected"
+        @click.stop="emit('toggleSelect')"
+      >
+        <!-- 受控复选框：pointer-events 交给容器处理，勾选状态由父组件 selected 驱动 -->
+        <input type="checkbox" :checked="selected" :tabindex="-1" readonly />
+        <span class="glass-select__hint">{{ selected ? '已选中' : '选中' }}</span>
+      </span>
       <h3 class="glass-title">{{ title }}</h3>
       <div v-if="tagText" class="glass-tag">{{ tagText }}</div>
     </div>
@@ -144,6 +164,33 @@ const emit = defineEmits<{
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+/* 选择模式复选框 */
+.glass-select {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.glass-select input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--brand-primary);
+  cursor: pointer;
+  /* 点击事件统一由容器处理，避免 label 转发导致重复触发 */
+  pointer-events: none;
+}
+
+.glass-select__hint {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .glass-title {

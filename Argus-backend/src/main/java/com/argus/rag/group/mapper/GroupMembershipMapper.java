@@ -40,6 +40,15 @@ public interface GroupMembershipMapper extends BaseMapper<Group> {
     /** 统计指定用户 ID 对应的用户数量（用于校验用户是否存在） */
     Long countUserById(@Param("userId") Long userId);
 
+    /** 统计指定 ID 的活跃群组数量（用于区分群组不存在与已归档） */
+    Long countActiveGroupById(@Param("groupId") Long groupId);
+
+    /** 归档群组（软删除：仅当群组处于 ACTIVE 状态时生效，返回影响行数） */
+    int archiveGroup(@Param("groupId") Long groupId);
+
+    /** 将指定群组的所有待处理邀请置为已取消，避免产生孤立邀请 */
+    int cancelPendingInvitationsByGroupId(@Param("groupId") Long groupId, @Param("canceledStatus") String canceledStatus);
+
     /** 插入群组并返回自增主键 */
     Long insertGroupReturningId(@Param("groupCode") String groupCode, @Param("groupName") String groupName, @Param("description") String description, @Param("ownerUserId") Long ownerUserId, @Param("status") String status);
 

@@ -104,6 +104,15 @@
           and status = #{fromStatus}
     </update>
 
+    <update id="cancelPendingJoinRequestsByGroupId">
+        update group_join_requests
+        set status = #{canceledStatus},
+            decided_at = now(),
+            updated_at = now()
+        where group_id = #{groupId}
+          and status = 'PENDING'
+    </update>
+
     <insert id="insertMembership">
         insert into group_memberships (
             group_id,

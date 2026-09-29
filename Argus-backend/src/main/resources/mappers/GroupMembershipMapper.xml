@@ -94,6 +94,30 @@
         where id = #{userId}
     </select>
 
+    <select id="countActiveGroupById" resultType="long">
+        select count(1)
+        from groups
+        where id = #{groupId}
+          and status = 'ACTIVE'
+    </select>
+
+    <update id="archiveGroup">
+        update groups
+        set status = 'ARCHIVED',
+            updated_at = now()
+        where id = #{groupId}
+          and status = 'ACTIVE'
+    </update>
+
+    <update id="cancelPendingInvitationsByGroupId">
+        update group_invitations
+        set status = #{canceledStatus},
+            decided_at = now(),
+            updated_at = now()
+        where group_id = #{groupId}
+          and status = 'PENDING'
+    </update>
+
     <select id="insertGroupReturningId" resultType="long">
         insert into groups (
             group_code,
@@ -215,6 +239,7 @@
                  inner join groups g on g.id = gi.group_id
                  inner join users u on u.id = gi.invitee_user_id
         where gi.inviter_user_id = #{inviterUserId}
+          and g.status = 'ACTIVE'
         order by gi.created_at desc
     </select>
 

@@ -14,6 +14,8 @@ const props = defineProps<{
   isInviting: boolean
   removingKeys: Set<string>
   requestActionIds: Set<number>
+  /** 当前小组删除中（OWNER 视图单个删除） */
+  isDeleting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -23,6 +25,7 @@ const emit = defineEmits<{
   rejectRequest: [requestId: number]
   inviteMember: [userId: number]
   leaveGroup: []
+  deleteGroup: []
 }>()
 
 const activeSection = ref<'members' | 'requests'>('members')
@@ -211,6 +214,14 @@ async function copyGroupCode(code: string) {
               </div>
             </li>
           </ul>
+        </div>
+
+        <!-- Danger zone：单个删除当前小组 -->
+        <div class="delete-action">
+          <el-button type="danger" plain :loading="props.isDeleting" @click="emit('deleteGroup')">
+            {{ props.isDeleting ? '删除中...' : '删除该小组' }}
+          </el-button>
+          <p class="field-hint">仅所有者可删除，删除后该小组及其文档、问答对全体成员不可见。</p>
         </div>
       </template>
 
@@ -580,6 +591,13 @@ async function copyGroupCode(code: string) {
 }
 
 .leave-action {
+  padding-top: 4px;
+}
+
+.delete-action {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
   padding-top: 4px;
 }
 </style>

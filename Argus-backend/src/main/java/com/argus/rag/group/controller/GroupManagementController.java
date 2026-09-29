@@ -4,6 +4,7 @@ import com.argus.rag.common.api.ApiResponse;
 import com.argus.rag.common.log.OperationLog;
 import com.argus.rag.group.model.dto.CreateGroupRequest;
 import com.argus.rag.group.model.dto.CreateInvitationRequest;
+import com.argus.rag.group.model.dto.DeleteGroupsRequest;
 import com.argus.rag.group.model.vo.GroupMemberResponse;
 import com.argus.rag.group.model.vo.MySentInvitationResponse;
 import com.argus.rag.group.service.GroupManagementService;
@@ -36,6 +37,13 @@ public class GroupManagementController {
     @PostMapping
     public ApiResponse<Long> createGroup(@Valid @RequestBody CreateGroupRequest createGroupRequest) {
         return ApiResponse.success(groupManagementService.createGroup(createGroupRequest));
+    }
+
+    /** 批量删除群组（软删除归档，仅 OWNER 可操作；单个删除传一个 ID 即可） */
+    @DeleteMapping
+    public ApiResponse<Void> deleteGroups(@Valid @RequestBody DeleteGroupsRequest deleteGroupsRequest) {
+        groupManagementService.deleteGroups(deleteGroupsRequest.groupIds());
+        return ApiResponse.success(null);
     }
 
     /** 创建群组邀请 */

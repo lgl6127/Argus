@@ -6,6 +6,7 @@ import {
   approveJoinRequest,
   createGroup,
   createInvitation,
+  deleteGroups,
   fetchMyJoinRequests,
   fetchMySentInvitations,
   fetchGroupMembers,
@@ -76,6 +77,25 @@ const isMembersLoading = ref(false)
 const isRequestsLoading = ref(false)
 const isMyRequestsLoading = ref(false)
 
+// ── 删除小组（选择模式 + 单个/批量删除）──
+const isDeleteMode = ref(false)
+const selectedDeleteIds = ref<Set<number>>(new Set())
+const isDeleting = ref(false)
+const selectedDeleteGroups = computed(() =>
+  ownedGroups.value.filter((g) => selectedDeleteIds.value.has(g.groupId)),
+)
+const canSubmitDelete = computed(() => !isDeleting.value && selectedDeleteIds.value.size > 0)
+
+// 小组列表变化后剔除已不存在的勾选，避免提交无效 ID
+watch(ownedGroups, (groups) => {
+  if (selectedDeleteIds.value.size === 0) return
+  const validIds = new Set(groups.map((g) => g.groupId))
+  const pruned = new Set([...selectedDeleteIds.value].filter((id) => validIds.has(id)))
+  if (pruned.size !== selectedDeleteIds.value.size) {
+    selectedDeleteIds.value = pruned
+  }
+})
+
 const currentUserLabel = computed(() => authStore.currentUser?.displayName ?? '用户')
 const currentUserIdLabel = computed(() => authStore.currentUser?.userId?.toString() ?? '--')
 const totalRequestCount = computed(() => myJoinRequests.value.length + mySentInvitations.value.length)
@@ -89,7 +109,10 @@ function computeDefaultTab() {
 // ── Lifecycle ──
 watch(
   () => authStore.currentUser?.userId,
-  () => { void loadInitialData() },
+  () => {
+    exitDeleteMode()
+    void loadInitialData()
+  },
   { immediate: true },
 )
 
@@ -125,6 +148,8 @@ function handleSelectTab(tab: string) {
   activeTab.value = tab as 'invitations' | 'owned' | 'joined' | 'requests'
   feedback.value = ''
   error.value = ''
+  // 选择模式仅适用于「我拥有的组」，切换到其他 tab 时退出
+  if (isDeleteMode.value) exitDeleteMode()
 }
 
 // ── Invitations ──
@@ -339,6 +364,103 @@ async function handleLeaveGroup(groupId: number) {
     actionIds.leaving.delete(groupId)
   }
 }
+
+// ── Delete groups ──
+function exitDeleteMode() {
+  isDeleteMode.value = false
+  selectedDeleteIds.value = new Set()
+}
+
+function toggleDeleteMode() {
+  if (isDeleteMode.value) {
+    exitDeleteMode()
+    return
+  }
+  isDeleteMode.value = true
+  selectedDeleteIds.value = new Set()
+  error.value = ''
+  feedback.value = ''
+  // 选择模式作用于「我拥有的组」，切换 tab 保证勾选目标合法
+  activeTab.value = 'owned'
+}
+
+function toggleGroupSelection(groupId: number) {
+  const next = new Set(selectedDeleteIds.value)
+  if (next.has(groupId)) {
+    next.delete(groupId)
+  } else {
+    next.add(groupId)
+  }
+  selectedDeleteIds.value = next
+}
+
+function selectAllOwnedGroups() {
+  // 全选 / 已全选时再点击则清空
+  if (selectedDeleteIds.value.size > 0 && selectedDeleteIds.value.size === ownedGroups.value.length) {
+    selectedDeleteIds.value = new Set()
+  } else {
+    selectedDeleteIds.value = new Set(ownedGroups.value.map((g) => g.groupId))
+  }
+}
+
+async function handleConfirmDelete() {
+  await deleteGroupsByIds(selectedDeleteGroups.value)
+}
+
+/** 管理弹窗内删除当前聚焦小组（单个删除） */
+async function handleDeleteFocusedGroup() {
+  if (!focusedGroup.value) return
+  const owned = ownedGroups.value.find((g) => g.groupId === focusedGroup.value!.groupId)
+  if (!owned) {
+    error.value = '仅小组所有者可以删除该小组'
+    return
+  }
+  await deleteGroupsByIds([owned])
+}
+
+/** 删除小组公共流程：确认弹窗 → 调用接口 → 刷新列表/统计/可访问小组状态 */
+async function deleteGroupsByIds(groups: GroupItem[]) {
+  if (groups.length === 0 || isDeleting.value) return
+
+  const names = groups.map((g) => `「${g.groupName}」`).join('、')
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除 ${groups.length} 个小组：${names} 吗？删除后小组成员将失去对该小组文档和问答的访问，此操作不可撤销。`,
+      '确认删除小组',
+      {
+        confirmButtonText: '删除',
+        confirmButtonClass: 'el-button--danger',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return // user cancelled
+  }
+
+  isDeleting.value = true
+  error.value = ''
+  feedback.value = ''
+  try {
+    await deleteGroups(groups.map((g) => g.groupId))
+    exitDeleteMode()
+    // 刷新小组列表、统计信息与可访问小组状态（currentGroupId 由 applyGroupQueryResult 重算）
+    await refreshWorkspace()
+    if (
+      showManageModal.value &&
+      focusedGroup.value &&
+      !ownedGroups.value.some((g) => g.groupId === focusedGroup.value!.groupId) &&
+      !joinedGroups.value.some((g) => g.groupId === focusedGroup.value!.groupId)
+    ) {
+      showManageModal.value = false
+    }
+    feedback.value = `已删除小组：${names}。`
+  } catch (err) {
+    error.value = extractApiError(err, '删除小组失败')
+  } finally {
+    isDeleting.value = false
+  }
+}
 </script>
 
 <template>
@@ -426,6 +548,18 @@ async function handleLeaveGroup(groupId: number) {
 
         <!-- Toolbar Actions -->
         <div class="groups-toolbar">
+          <button
+            class="modern-action-btn modern-action-btn--danger"
+            :class="{ 'is-active': isDeleteMode }"
+            type="button"
+            :disabled="ownedGroups.length === 0"
+            @click="toggleDeleteMode"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            {{ isDeleteMode ? '退出删除' : '删除小组' }}
+          </button>
           <button class="modern-action-btn modern-action-btn--primary" @click="showCreateModal = true">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
@@ -437,6 +571,37 @@ async function handleLeaveGroup(groupId: number) {
               <path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
             </svg>
             加入小组
+          </button>
+        </div>
+      </div>
+
+      <!-- 删除选择模式操作栏 -->
+      <div v-if="isDeleteMode" class="groups-delete-bar">
+        <span
+          class="groups-delete-bar__check"
+          role="checkbox"
+          :aria-checked="ownedGroups.length > 0 && selectedDeleteIds.size === ownedGroups.length"
+          @click="selectAllOwnedGroups"
+        >
+          <!-- 受控复选框：pointer-events 交给容器处理，状态由 selectedDeleteIds 驱动 -->
+          <input
+            type="checkbox"
+            :checked="ownedGroups.length > 0 && selectedDeleteIds.size === ownedGroups.length"
+            :tabindex="-1"
+            readonly
+          />
+          全选我拥有的小组
+        </span>
+        <span class="groups-delete-bar__count">已选择 {{ selectedDeleteIds.size }} 个</span>
+        <div class="groups-delete-bar__actions">
+          <button class="modern-action-btn" type="button" @click="exitDeleteMode">取消</button>
+          <button
+            class="modern-action-btn modern-action-btn--danger is-solid"
+            type="button"
+            :disabled="!canSubmitDelete"
+            @click="handleConfirmDelete"
+          >
+            {{ isDeleting ? '删除中…' : `确认删除（${selectedDeleteIds.size}）` }}
           </button>
         </div>
       </div>
@@ -453,7 +618,10 @@ async function handleLeaveGroup(groupId: number) {
         <OwnedGroupsTab
           v-if="activeTab === 'owned'"
           :items="ownedGroups"
+          :selection-mode="isDeleteMode"
+          :selected-ids="selectedDeleteIds"
           @manage="(id: number) => openManageModal(id, 'owner')"
+          @toggle-select="toggleGroupSelection"
         />
         <JoinedGroupsTab
           v-if="activeTab === 'joined'"
@@ -490,12 +658,14 @@ async function handleLeaveGroup(groupId: number) {
       :is-members-loading="isMembersLoading"
       :is-requests-loading="isRequestsLoading"
       :is-inviting="isInviting"
+      :is-deleting="isDeleting"
       :removing-keys="actionIds.removing"
       :request-action-ids="actionIds.joinRequest"
       @remove-member="handleRemoveMember"
       @approve-request="handleApproveRequest"
       @reject-request="handleRejectRequest"
       @invite-member="handleInviteMember"
+      @delete-group="handleDeleteFocusedGroup"
       @leave-group="() => { if (focusedGroup) handleLeaveGroup(focusedGroup.groupId) }"
     />
   </div>
@@ -624,6 +794,85 @@ async function handleLeaveGroup(groupId: number) {
   background: var(--brand-primary-dark);
   border-color: var(--brand-primary-dark);
   color: #fff;
+}
+
+.modern-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 危险操作按钮（删除小组） */
+.modern-action-btn--danger {
+  color: var(--el-color-danger, #ef4444);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.modern-action-btn--danger:hover:not(:disabled) {
+  color: var(--el-color-danger, #ef4444);
+  border-color: var(--el-color-danger, #ef4444);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.modern-action-btn--danger.is-active {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--el-color-danger, #ef4444);
+}
+
+.modern-action-btn--danger.is-solid {
+  background: var(--el-color-danger, #ef4444);
+  border-color: var(--el-color-danger, #ef4444);
+  color: #fff;
+}
+
+.modern-action-btn--danger.is-solid:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+/* 删除选择模式操作栏 */
+.groups-delete-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 10px 16px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-sm);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.groups-delete-bar__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.groups-delete-bar__check input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--el-color-danger, #ef4444);
+  cursor: pointer;
+  /* 点击事件统一由容器处理，避免 label 转发导致重复触发 */
+  pointer-events: none;
+}
+
+.groups-delete-bar__count {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.groups-delete-bar__actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
 }
 
 /* Tabs */

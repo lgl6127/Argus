@@ -5,11 +5,24 @@ import EmptyState from '@/components/EmptyState.vue'
 
 defineProps<{
   items: GroupItem[]
+  /** 删除选择模式：卡片展示复选框 */
+  selectionMode?: boolean
+  /** 已选中的群组 ID 集合 */
+  selectedIds?: Set<number>
 }>()
 
 const emit = defineEmits<{
   manage: [groupId: number]
+  toggleSelect: [groupId: number]
 }>()
+
+function handleCardClick(groupId: number, selectionMode?: boolean) {
+  if (selectionMode) {
+    emit('toggleSelect', groupId)
+  } else {
+    emit('manage', groupId)
+  }
+}
 
 function formatDate(dateStr?: string) {
   if (!dateStr) return '未知时间'
@@ -39,7 +52,10 @@ function formatDate(dateStr?: string) {
         :time="`创建于 ${formatDate(group.createdAt)}`"
         tagText="所有者"
         tagType="accent"
-        @click="emit('manage', group.groupId)"
+        :selectable="!!selectionMode"
+        :selected="!!selectedIds?.has(group.groupId)"
+        @click="handleCardClick(group.groupId, selectionMode)"
+        @toggle-select="emit('toggleSelect', group.groupId)"
       >
         <template #meta v-if="group.pendingRequestCount && group.pendingRequestCount > 0">
           <div class="group-card__alert">
