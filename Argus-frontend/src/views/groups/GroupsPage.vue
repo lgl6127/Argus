@@ -642,6 +642,7 @@ async function deleteGroupsByIds(groups: GroupItem[]) {
     <CreateGroupModal
       v-model:visible="showCreateModal"
       :loading="isCreating"
+      :error="error"
       @submit="handleCreateGroup"
     />
     <JoinGroupModal

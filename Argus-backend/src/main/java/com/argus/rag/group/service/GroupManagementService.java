@@ -14,6 +14,7 @@ import com.argus.rag.group.model.dto.CreateInvitationRequest;
 import com.argus.rag.group.model.vo.GroupMemberResponse;
 import com.argus.rag.group.model.vo.MySentInvitationResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -33,6 +34,7 @@ public class GroupManagementService {
     private static final int MAX_GROUP_NAME_LENGTH = 128;
     private static final int MAX_GROUP_DESCRIPTION_LENGTH = 512;
     private static final int MAX_DELETE_BATCH_SIZE = 100;
+    private static final String GROUP_NAME_DUPLICATE_MESSAGE = "小组名称已存在，请更换名称";
     private final GroupMembershipMapper groupMembershipMapper;
     private final GroupJoinRequestMapper groupJoinRequestMapper;
     private final GroupMembershipService groupMembershipService;
@@ -50,19 +52,26 @@ public class GroupManagementService {
         this.currentUserService = currentUserService;
     }
 
-    /** 创建新群组，创建者自动成为 OWNER */
+    /** 创建新群组，创建者自动成为 OWNER；组名称在活跃群组内全局唯一 */
     @Transactional
     public Long createGroup(CreateGroupRequest createGroupRequest) {
         CurrentUserService.CurrentUser currentUser = currentUserService.requireBusinessUser();
         String groupName = requireGroupName(createGroupRequest.name());
+        rejectDuplicateGroupName(groupName);
         String description = normalizeDescription(createGroupRequest.description());
-        Long groupId = groupMembershipMapper.insertGroupReturningId(
-                buildGroupCode(),
-                groupName,
-                description,
-                currentUser.userId(),
-                GroupStatus.ACTIVE.name()
-        );
+        Long groupId;
+        try {
+            groupId = groupMembershipMapper.insertGroupReturningId(
+                    buildGroupCode(),
+                    groupName,
+                    description,
+                    currentUser.userId(),
+                    GroupStatus.ACTIVE.name()
+            );
+        } catch (DuplicateKeyException e) {
+            // 并发窗口内另一请求已插入同名活跃群组，由 uq_groups_active_name 部分唯一索引拦截
+            throw new BusinessException(GROUP_NAME_DUPLICATE_MESSAGE, e);
+        }
         groupMembershipMapper.insertMembership(groupId, currentUser.userId(), GroupRole.OWNER.name());
         log.info("创建群组成功: groupId={}, groupName={}, ownerUserId={}", groupId, groupName, currentUser.userId());
         return groupId;
@@ -300,6 +309,13 @@ public class GroupManagementService {
             throw new BusinessException("组名称不能超过 128");
         }
         return trimmedName;
+    }
+
+    /** 重名校验：名称在活跃群组（ACTIVE）内全局唯一，归档后名称可复用 */
+    private void rejectDuplicateGroupName(String groupName) {
+        if (hasRows(groupMembershipMapper.countActiveGroupsByName(groupName))) {
+            throw new BusinessException(GROUP_NAME_DUPLICATE_MESSAGE);
+        }
     }
 
     private String normalizeDescription(String description) {

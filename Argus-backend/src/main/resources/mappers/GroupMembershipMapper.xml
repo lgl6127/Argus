@@ -94,6 +94,13 @@
         where id = #{userId}
     </select>
 
+    <select id="countActiveGroupsByName" resultType="long">
+        select count(1)
+        from groups
+        where status = 'ACTIVE'
+          and group_name = #{groupName}
+    </select>
+
     <select id="selectActiveGroupIdsByIds" resultType="long">
         select id
         from groups

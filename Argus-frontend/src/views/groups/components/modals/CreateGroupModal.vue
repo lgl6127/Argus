@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps<{
   visible: boolean
   loading: boolean
+  /** 后端提交失败时传入的错误信息（如“小组名称已存在”），优先于本地校验错误展示 */
+  error?: string
 }>()
 
 const emit = defineEmits<{
@@ -13,7 +15,10 @@ const emit = defineEmits<{
 
 const name = ref('')
 const description = ref('')
-const error = ref('')
+const localError = ref('')
+
+// 外部错误（后端返回）优先，本地校验错误兜底
+const displayError = computed(() => props.error || localError.value)
 
 watch(
   () => props.visible,
@@ -21,15 +26,15 @@ watch(
     if (v) {
       name.value = ''
       description.value = ''
-      error.value = ''
+      localError.value = ''
     }
   },
 )
 
 function handleSubmit() {
-  error.value = ''
+  localError.value = ''
   if (name.value.trim().length === 0) {
-    error.value = '请输入小组名称'
+    localError.value = '请输入小组名称'
     return
   }
   emit('submit', {
@@ -55,7 +60,7 @@ function handleSubmit() {
     </template>
 
     <div class="modal-body">
-      <p v-if="error" class="modal-error">{{ error }}</p>
+      <p v-if="displayError" class="modal-error">{{ displayError }}</p>
 
       <label class="form-field">
         <span class="form-field__label">小组名称</span>

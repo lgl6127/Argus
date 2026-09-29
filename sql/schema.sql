@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS groups (
 COMMENT ON TABLE  groups                IS '群组表（知识库）';
 COMMENT ON COLUMN groups.id             IS '主键';
 COMMENT ON COLUMN groups.group_code     IS '群组编码，唯一，前端展示用';
-COMMENT ON COLUMN groups.group_name     IS '群组名称';
+COMMENT ON COLUMN groups.group_name     IS '群组名称，活跃群组（ACTIVE）内唯一';
 COMMENT ON COLUMN groups.description    IS '群组描述';
 COMMENT ON COLUMN groups.owner_user_id  IS '群组创建者（所有者）用户 ID';
 COMMENT ON COLUMN groups.status         IS '群组状态：ACTIVE | ARCHIVED';
@@ -98,6 +98,9 @@ COMMENT ON COLUMN groups.updated_at     IS '更新时间';
 
 -- 索引：按所有者查询
 CREATE INDEX IF NOT EXISTS idx_groups_owner ON groups (owner_user_id);
+-- 索引：活跃群组名称全局唯一（部分唯一索引，归档 ARCHIVED 后名称可复用，并发插入兜底）
+CREATE UNIQUE INDEX IF NOT EXISTS uq_groups_active_name
+    ON groups (group_name) WHERE status = 'ACTIVE';
 
 
 -- 群组成员表

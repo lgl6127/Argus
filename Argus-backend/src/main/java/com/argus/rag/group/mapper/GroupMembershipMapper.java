@@ -40,6 +40,9 @@ public interface GroupMembershipMapper extends BaseMapper<Group> {
     /** 统计指定用户 ID 对应的用户数量（用于校验用户是否存在） */
     Long countUserById(@Param("userId") Long userId);
 
+    /** 统计指定名称的活跃群组数（用于创建时名称唯一性校验） */
+    Long countActiveGroupsByName(@Param("groupName") String groupName);
+
     /** 按 ID 集合查询活跃群组 ID（用于批量删除前的存在性校验） */
     List<Long> selectActiveGroupIdsByIds(@Param("groupIds") List<Long> groupIds);
 
