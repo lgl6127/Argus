@@ -240,7 +240,8 @@ public class GroupManagementService {
 
     private String normalizeDescription(String description) {
         if (!StringUtils.hasText(description)) {
-            return null;
+            // groups.description 为 NOT NULL 列，空描述归一化为空字符串，避免显式插入 NULL 违反约束
+            return "";
         }
         String trimmedDescription = description.trim();
         if (trimmedDescription.length() > MAX_GROUP_DESCRIPTION_LENGTH) {
